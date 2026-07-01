@@ -3,3 +3,10 @@ Thumbs.db
 .idea/
 serve-local.cjs
 design-concept.png
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
