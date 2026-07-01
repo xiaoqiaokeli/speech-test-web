@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>言语测试</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="app" class="app-shell" aria-live="polite">
+      <section class="topbar">
+        <div>
+          <p class="app-label">言语测试</p>
+          <h1 id="screenTitle">准备开始</h1>
+        </div>
+        <div class="progress-pill" id="progressText">0 / 15</div>
+      </section>
+
+      <section class="test-panel" id="testPanel">
+        <div class="progress-track" aria-hidden="true">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+
+        <div class="status-orb" id="statusOrb" aria-hidden="true">
+          <span id="statusIcon">▶</span>
+        </div>
+
+        <p class="phase-text" id="phaseText">点击开始后自动播放词语</p>
+        <p class="hint-text" id="hintText">播放时不会显示词语，请认真听。</p>
+
+        <div class="answer-card is-hidden" id="answerCard">
+          <span>正确答案</span>
+          <strong id="answerText"></strong>
+        </div>
+
+        <div class="result-flash is-hidden" id="resultFlash"></div>
+      </section>
+
+      <section class="result-panel is-hidden" id="resultPanel">
+        <div class="score-grid">
+          <div class="score-box good">
+            <span id="correctCount">0</span>
+            <p>正确</p>
+          </div>
+          <div class="score-box bad">
+            <span id="wrongCount">0</span>
+            <p>错误</p>
+          </div>
+          <div class="score-box rate">
+            <span id="accuracyText">0%</span>
+            <p>正确率</p>
+          </div>
+        </div>
+
+        <div class="wrong-list-wrap">
+          <h2>本次词语</h2>
+          <div class="result-table-head" aria-hidden="true">
+            <span>序号</span>
+            <span>正确答案</span>
+            <span>你所说的</span>
+          </div>
+          <ul id="resultList" class="result-list"></ul>
+        </div>
+
+        <button class="primary-button" id="restartButton" type="button">重新测试</button>
+      </section>
+
+      <section class="notice-modal" id="noticeModal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
+        <div class="notice-card">
+          <h2 id="noticeTitle">请在安静环境中测试</h2>
+          <p>嘴巴靠近手机，大声朗读。录音越清楚，结果越准确。</p>
+          <p>如果没听清，也请读出大概听到的发音，这样才能测出真实听力情况。</p>
+          <button class="primary-button" id="startButton" type="button">开始测试</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./words-data.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
