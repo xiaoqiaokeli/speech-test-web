@@ -147,6 +147,7 @@
     answerCard: document.getElementById("answerCard"),
     answerText: document.getElementById("answerText"),
     resultFlash: document.getElementById("resultFlash"),
+    resumeAudioButton: document.getElementById("resumeAudioButton"),
     noticeModal: document.getElementById("noticeModal"),
     startButton: document.getElementById("startButton"),
     restartButton: document.getElementById("restartButton"),
@@ -174,6 +175,11 @@
   elements.startButton.addEventListener("click", () => {
     elements.noticeModal.classList.add("is-hidden");
     startTest();
+  });
+
+  elements.resumeAudioButton.addEventListener("click", () => {
+    elements.resumeAudioButton.classList.add("is-hidden");
+    playCurrentWord();
   });
 
   elements.restartButton.addEventListener("click", () => {
@@ -238,6 +244,24 @@
     return copy;
   }
 
+  function getAudioElement() {
+    if (!currentAudio) {
+      currentAudio = document.createElement("audio");
+      currentAudio.preload = "auto";
+      currentAudio.setAttribute("playsinline", "");
+      currentAudio.style.display = "none";
+      document.body.appendChild(currentAudio);
+    }
+    return currentAudio;
+  }
+
+  function showPlaybackBlocked() {
+    elements.screenTitle.textContent = "需要点击播放";
+    elements.phaseText.textContent = "请点击继续播放";
+    elements.hintText.textContent = "苹果浏览器限制了自动播放声音，请点一下继续。";
+    elements.resumeAudioButton.classList.remove("is-hidden");
+  }
+
   function playCurrentWord() {
     const item = testItems[currentIndex];
     finalized = false;
@@ -245,15 +269,18 @@
     setPhase("playing");
     hideFlash();
     hideAnswer();
+    elements.resumeAudioButton.classList.add("is-hidden");
     stopAudio();
 
-    currentAudio = new Audio(item.audio);
-    currentAudio.preload = "auto";
+    currentAudio = getAudioElement();
     currentAudio.onended = beginRecognition;
     currentAudio.onerror = () => finalizeCurrent([""], "音频播放失败");
-    currentAudio.play().catch(() => {
-      showFatal("音频无法自动播放", "微信或浏览器限制了自动播放。请返回后重新点击“开始测试”。");
-    });
+    currentAudio.src = item.audio;
+    currentAudio.load();
+    const playPromise = currentAudio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => showPlaybackBlocked());
+    }
   }
 
   function beginRecognition() {
@@ -520,7 +547,6 @@
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
-      currentAudio = null;
     }
   }
 

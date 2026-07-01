@@ -343,6 +343,23 @@ h1 {
 .result-list .correct-row .heard {
   color: var(--good);
 }
+
+.resume-button {
+  width: min(100%, 300px);
+  min-height: 56px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(217, 130, 0, 0.22);
+}
+
+.resume-button:active {
+  transform: translateY(1px);
+}
 .primary-button {
   width: 100%;
   min-height: 62px;
@@ -390,7 +407,24 @@ h1 {
   line-height: 1.48;
 }
 
-.notice-card .primary-button {
+.notice-card 
+.resume-button {
+  width: min(100%, 300px);
+  min-height: 56px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(217, 130, 0, 0.22);
+}
+
+.resume-button:active {
+  transform: translateY(1px);
+}
+.primary-button {
   margin-top: 10px;
 }
 
