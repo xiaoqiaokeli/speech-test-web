@@ -35,33 +35,21 @@
         </div>
 
         <div class="result-flash is-hidden" id="resultFlash"></div>
-
         <button class="resume-button is-hidden" id="resumeAudioButton" type="button">点击继续播放</button>
         <button class="record-button is-hidden" id="recordButton" type="button">点击开始录音</button>
       </section>
 
       <section class="result-panel is-hidden" id="resultPanel">
         <div class="score-grid">
-          <div class="score-box good">
-            <span id="correctCount">0</span>
-            <p>正确</p>
-          </div>
-          <div class="score-box bad">
-            <span id="wrongCount">0</span>
-            <p>错误</p>
-          </div>
-          <div class="score-box rate">
-            <span id="accuracyText">0%</span>
-            <p>正确率</p>
-          </div>
+          <div class="score-box good"><span id="correctCount">0</span><p>正确</p></div>
+          <div class="score-box bad"><span id="wrongCount">0</span><p>错误</p></div>
+          <div class="score-box rate"><span id="accuracyText">0%</span><p>正确率</p></div>
         </div>
 
         <div class="wrong-list-wrap">
           <h2>本次词语</h2>
           <div class="result-table-head" aria-hidden="true">
-            <span>序号</span>
-            <span>正确答案</span>
-            <span>你所说的</span>
+            <span>序号</span><span>正确答案</span><span>你所说的</span>
           </div>
           <ul id="resultList" class="result-list"></ul>
         </div>
