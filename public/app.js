@@ -10,6 +10,8 @@
   const RECORD_SOFT_RMS_THRESHOLD = 0.004;
   const RECORD_NOISE_MULTIPLIER = 1.8;
   const RECORD_SILENCE_MULTIPLIER = 1.25;
+  const RECORD_END_PEAK_MULTIPLIER = 0.35;
+  const RECORD_NOISE_LEARN_RATE = 0.02;
   const RECORD_SOFT_SPEECH_MS = 180;
   const NEXT_DELAY_MS = 2000;
   const TARGET_SAMPLE_RATE = 16000;
@@ -205,7 +207,7 @@
 
   async function recordPcm(durationMs) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("当前浏览器无法调用麦克风");
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: { ideal: 1 }, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioContextClass();
     if (audioContext.state === "suspended") await audioContext.resume();
@@ -218,6 +220,7 @@
     let speechStarted = false;
     let lastVoiceAt = 0;
     let noiseFloor = 0.004;
+    let peakRms = 0;
     let softSpeechMs = 0;
     let cleaned = false;
     let maxTimer = null;
@@ -255,8 +258,11 @@
       const frameMs = ((input.length || 0) / (sampleRate || audioContext.sampleRate)) * 1000;
       const speechThreshold = Math.max(RECORD_RMS_THRESHOLD, noiseFloor * RECORD_NOISE_MULTIPLIER);
       const silenceThreshold = Math.max(RECORD_SOFT_RMS_THRESHOLD, noiseFloor * RECORD_SILENCE_MULTIPLIER);
+      peakRms = Math.max(peakRms, rms);
+      const endVoiceThreshold = Math.max(silenceThreshold, peakRms * RECORD_END_PEAK_MULTIPLIER);
       const isSpeechFrame = rms > speechThreshold;
       const isSoftVoiceFrame = rms > silenceThreshold;
+      const isEndVoiceFrame = rms > endVoiceThreshold;
 
       if (isSpeechFrame || isSoftVoiceFrame) {
         softSpeechMs += frameMs;
@@ -269,10 +275,10 @@
         lastVoiceAt = now;
       }
 
-      if (speechStarted && isSoftVoiceFrame) {
+      if (speechStarted && isEndVoiceFrame) {
         lastVoiceAt = now;
-      } else if (!speechStarted && elapsed < RECORD_START_GRACE_MS && !isSoftVoiceFrame) {
-        noiseFloor = (noiseFloor * 0.97) + (rms * 0.03);
+      } else if ((!speechStarted && elapsed < RECORD_START_GRACE_MS && !isSoftVoiceFrame) || (speechStarted && !isSpeechFrame && !isEndVoiceFrame)) {
+        noiseFloor = (noiseFloor * (1 - RECORD_NOISE_LEARN_RATE)) + (rms * RECORD_NOISE_LEARN_RATE);
       }
 
       const pcm = downsampleTo16k(input, sampleRate || audioContext.sampleRate);
