@@ -62,6 +62,7 @@
     hintText: document.getElementById("hintText"), answerCard: document.getElementById("answerCard"),
     answerText: document.getElementById("answerText"), heardText: document.getElementById("heardText"), resultFlash: document.getElementById("resultFlash"),
     resumeAudioButton: document.getElementById("resumeAudioButton"), recordButton: document.getElementById("recordButton"),
+    retryButton: document.getElementById("retryButton"),
     noticeModal: document.getElementById("noticeModal"), startButton: document.getElementById("startButton"),
     restartButton: document.getElementById("restartButton"), testPanel: document.getElementById("testPanel"),
     resultPanel: document.getElementById("resultPanel"), correctCount: document.getElementById("correctCount"),
@@ -81,10 +82,17 @@
   let finalizing = false;
   let recordingInProgress = false;
   let recognitionRun = 0;
+  let retryAction = null;
 
   elements.startButton.addEventListener("click", () => { elements.noticeModal.classList.add("is-hidden"); startTest(); });
   elements.resumeAudioButton.addEventListener("click", () => { elements.resumeAudioButton.classList.add("is-hidden"); playCurrentWord(); });
   elements.recordButton.addEventListener("click", () => { elements.recordButton.classList.add("is-hidden"); beginXfyunRecognition({ manual: true }); });
+  elements.retryButton.addEventListener("click", () => {
+    elements.retryButton.classList.add("is-hidden");
+    const action = retryAction;
+    retryAction = null;
+    if (action) action();
+  });
   elements.restartButton.addEventListener("click", () => startTest());
 
   function startTest() {
@@ -150,11 +158,16 @@
     stopAudio();
     const audio = getAudioElement();
     audio.onended = () => beginXfyunRecognition({ manual: false });
-    audio.onerror = () => finalizeCurrent("音频播放失败");
+    audio.onerror = () => showRetryable("音频加载失败", "音频加载失败，请检查网络连接后点击重试。", () => playCurrentWord());
     audio.src = item.audio;
     audio.load();
     const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") playPromise.catch(() => showPlaybackBlocked());
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => {
+        // 加载失败会同时触发 onerror，这里只处理浏览器自动播放限制
+        if (error?.name === "NotAllowedError") showPlaybackBlocked();
+      });
+    }
   }
 
   function showPlaybackBlocked() {
@@ -162,6 +175,24 @@
     elements.phaseText.textContent = "请点击继续播放";
     elements.hintText.textContent = "苹果浏览器限制了自动播放声音，请点一下继续。";
     elements.resumeAudioButton.classList.remove("is-hidden");
+  }
+
+  function showRetryable(title, message, action) {
+    stopActiveRecording();
+    stopAudio();
+    clearTimeout(countdownTimer);
+    hideFlash();
+    hideAnswer();
+    hideActionButtons();
+    finalizing = false;
+    recordingInProgress = false;
+    retryAction = action;
+    elements.screenTitle.textContent = title;
+    elements.phaseText.textContent = title;
+    elements.hintText.textContent = message;
+    elements.statusOrb.className = "status-orb wrong";
+    setStatusIcon(ICONS.alert);
+    elements.retryButton.classList.remove("is-hidden");
   }
 
   function showManualRecordStart(message) {
@@ -179,10 +210,14 @@
     try {
       const response = await fetch("/api/xfyun-token", { cache: "no-store" });
       signed = await response.json();
-      if (!response.ok || !signed.url || !signed.appId) throw new Error(signed.error || "讯飞签名接口不可用");
+      if (!response.ok || !signed.url || !signed.appId) throw new Error(signed.error || "server-config");
     } catch (error) {
       recordingInProgress = false;
-      return showFatal("讯飞接口未配置", "请检查 Cloudflare Pages 环境变量和 /api/xfyun-token 是否正常。");
+      // fetch 在断网时抛 TypeError；服务器有响应但内容异常则是服务问题
+      if (error instanceof TypeError) {
+        return showRetryable("网络连接失败", "无法连接语音识别服务，请检查网络后点击重试。", () => beginXfyunRecognition({ manual: true }));
+      }
+      return showRetryable("语音服务暂不可用", "语音识别服务出现问题，请稍后点击重试。若持续出现，请联系我们。", () => beginXfyunRecognition({ manual: true }));
     }
 
     try {
@@ -197,6 +232,10 @@
         recordingInProgress = false;
         showManualRecordStart("浏览器限制了自动录音，请点一下开始录音。");
         return;
+      }
+      if (isNetworkError(error)) {
+        recordingInProgress = false;
+        return showRetryable("网络连接失败", "识别时网络出现问题，请检查网络后点击重试，并重新朗读。", () => beginXfyunRecognition({ manual: true }));
       }
       finalizeCurrent(error.message || "识别失败");
     } finally {
@@ -328,6 +367,11 @@
     return ["NotAllowedError", "SecurityError", "InvalidStateError", "NotReadableError"].includes(name) || message.includes("麦克风") || message.includes("microphone");
   }
 
+  function isNetworkError(error) {
+    const message = String(error?.message || "");
+    return message.includes("连接失败") || error instanceof TypeError;
+  }
+
   function recognizeWithXfyun({ url, appId }, pcm) {
     return new Promise((resolve, reject) => {
       if (!pcm.length) return reject(new Error("未识别到声音"));
@@ -441,11 +485,9 @@
     if (finalizing) return;
     finalizing = true;
     const item = testItems[currentIndex];
-    const rawText = String(rawHeard || "");
-    const heard = cleanChinese(rawText) || rawText || "未识别到声音";
-    const matched = isPronunciationMatch(item.word, heard);
-    answers.push({ item, heard, correct: matched, order: currentIndex + 1 });
-    showJudgement(matched, item, heard);
+    const { correct, display } = judgePronunciation(item.word, rawHeard);
+    answers.push({ item, heard: display, correct, order: currentIndex + 1 });
+    showJudgement(correct, item, display);
     startCountdown(currentIndex >= testItems.length - 1);
   }
 
@@ -472,14 +514,76 @@
     countdownTimer = window.setTimeout(tick, 1000);
   }
 
-  function isPronunciationMatch(expected, actual) {
+  function judgePronunciation(expected, rawHeard) {
     const cleanExpected = cleanChinese(expected);
-    const cleanActual = cleanChinese(actual);
+    const rawText = String(rawHeard || "");
+    const cleanActual = cleanChinese(rawText);
+    const base = stripFillers(cleanActual);
+    const tail = stripFillers(textAfterLastCorrection(cleanActual));
+
+    // 依次尝试：改口后的内容（优先）、去语气词后的整体
+    let matchedCandidate = "";
+    if (cleanExpected) {
+      for (const candidate of [tail, base]) {
+        if (candidate && (isBasicMatch(cleanExpected, candidate) || isRepeatedMatch(cleanExpected, candidate))) {
+          matchedCandidate = candidate;
+          break;
+        }
+      }
+    }
+
+    // “你所说的”显示真正用于判断的内容：改口后、去语气词、合并重复
+    const effective = matchedCandidate || tail || base;
+    const display = collapseRepeats(effective, cleanExpected.length) || effective || cleanActual || rawText || "未识别到声音";
+    return { correct: Boolean(matchedCandidate), display };
+  }
+
+  function isBasicMatch(cleanExpected, cleanActual) {
     if (cleanActual.length !== cleanExpected.length) return false;
     if (cleanActual === cleanExpected) return true;
     const expectedTone = getToneKey(cleanExpected);
     const actualTone = getToneKey(cleanActual);
     return Boolean(expectedTone && actualTone && expectedTone === actualTone);
+  }
+
+  const CORRECTION_MARKERS = ["不是", "不对", "错了", "说错", "应该是", "应该说", "改成", "换成", "重说", "重来"];
+  const FILLER_CHARS = new Set(Array.from("嗯啊呃哦噢喔唉哎呀嘛"));
+
+  function stripFillers(text) {
+    const chars = Array.from(text);
+    let start = 0;
+    let end = chars.length;
+    while (start < end && FILLER_CHARS.has(chars[start])) start += 1;
+    while (end > start && FILLER_CHARS.has(chars[end - 1])) end -= 1;
+    return chars.slice(start, end).join("");
+  }
+
+  function isRepeatedMatch(cleanExpected, cleanActual) {
+    const unit = cleanExpected.length;
+    if (!unit || cleanActual.length < unit * 2 || cleanActual.length % unit !== 0) return false;
+    for (let i = 0; i < cleanActual.length; i += unit) {
+      if (!isBasicMatch(cleanExpected, cleanActual.slice(i, i + unit))) return false;
+    }
+    return true;
+  }
+
+  // 形如“大学大学”的完整重复，显示时合并为“大学”（各段必须完全一致）
+  function collapseRepeats(text, unitLen) {
+    if (!text || !unitLen || text.length < unitLen * 2 || text.length % unitLen !== 0) return "";
+    const unit = text.slice(0, unitLen);
+    for (let i = unitLen; i < text.length; i += unitLen) {
+      if (text.slice(i, i + unitLen) !== unit) return "";
+    }
+    return unit;
+  }
+
+  function textAfterLastCorrection(text) {
+    let bestEnd = -1;
+    for (const marker of CORRECTION_MARKERS) {
+      const index = text.lastIndexOf(marker);
+      if (index !== -1 && index + marker.length > bestEnd) bestEnd = index + marker.length;
+    }
+    return bestEnd === -1 ? "" : text.slice(bestEnd);
   }
 
   function getToneKey(text) {
@@ -534,7 +638,7 @@
   function hideAnswer() { elements.answerText.textContent = ""; elements.heardText.textContent = ""; elements.answerCard.classList.add("is-hidden"); }
   function showFlash(correct) { elements.resultFlash.textContent = correct ? "正确" : "错误"; elements.resultFlash.className = `result-flash ${correct ? "good" : "bad"}`; }
   function hideFlash() { elements.resultFlash.className = "result-flash is-hidden"; }
-  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); }
+  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); elements.retryButton.classList.add("is-hidden"); retryAction = null; }
 
   function showResults() {
     stopActiveRecording();
