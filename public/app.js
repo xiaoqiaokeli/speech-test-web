@@ -4,7 +4,7 @@
   const TEST_SIZE = 15;
   const RECORD_MAX_MS = 10000;
   const RECORD_MIN_MS = 900;
-  const RECORD_SILENCE_MS = 1000;
+  const RECORD_SILENCE_MS = 2000;
   const RECORD_START_GRACE_MS = 2600;
   const RECORD_RMS_THRESHOLD = 0.006;
   const RECORD_SOFT_RMS_THRESHOLD = 0.004;
@@ -37,7 +37,7 @@
     hintText: document.getElementById("hintText"), answerCard: document.getElementById("answerCard"),
     answerText: document.getElementById("answerText"), heardText: document.getElementById("heardText"), resultFlash: document.getElementById("resultFlash"),
     resumeAudioButton: document.getElementById("resumeAudioButton"), recordButton: document.getElementById("recordButton"),
-    retryButton: document.getElementById("retryButton"),
+    retryButton: document.getElementById("retryButton"), skipButton: document.getElementById("skipButton"),
     noticeModal: document.getElementById("noticeModal"), startButton: document.getElementById("startButton"),
     restartButton: document.getElementById("restartButton"), testPanel: document.getElementById("testPanel"),
     resultPanel: document.getElementById("resultPanel"), correctCount: document.getElementById("correctCount"),
@@ -67,9 +67,11 @@
     retryAction = null;
     if (action) action();
   });
+  elements.skipButton.addEventListener("click", skipCurrentQuestion);
   elements.restartButton.addEventListener("click", () => startTest());
 
   function startTest() {
+    recognitionRun += 1;
     stopActiveRecording();
     stopAudio();
     clearTimeout(countdownTimer);
@@ -129,6 +131,7 @@
     hideFlash();
     hideAnswer();
     hideActionButtons();
+    elements.skipButton.classList.remove("is-hidden");
     stopAudio();
     const audio = getAudioElement();
     audio.onended = () => beginXfyunRecognition({ manual: false });
@@ -177,6 +180,7 @@
 
   async function beginXfyunRecognition(options = {}) {
     if (recordingInProgress || finalizing) return;
+    const run = ++recognitionRun;
     recordingInProgress = true;
     const manual = options.manual === true;
     elements.recordButton.classList.add("is-hidden");
@@ -184,6 +188,7 @@
     try {
       const response = await fetch("/api/xfyun-token", { cache: "no-store" });
       signed = await response.json();
+      if (run !== recognitionRun) return;
       if (!response.ok || !signed.url || !signed.appId) throw new Error(signed.error || "server-config");
     } catch (error) {
       recordingInProgress = false;
@@ -197,10 +202,13 @@
     try {
       setPhase("recording");
       const pcm = await recordPcm(RECORD_MAX_MS);
+      if (run !== recognitionRun) return;
       setPhase("recognizing");
       const text = await recognizeWithXfyun(signed, pcm);
+      if (run !== recognitionRun) return;
       finalizeCurrent(text);
     } catch (error) {
+      if (run !== recognitionRun) return;
       console.error(error);
       if (!manual && isRecordingStartError(error)) {
         recordingInProgress = false;
@@ -213,8 +221,10 @@
       }
       finalizeCurrent(error.message || "识别失败");
     } finally {
-      activeCleanup = null;
-      recordingInProgress = false;
+      if (run === recognitionRun) {
+        activeCleanup = null;
+        recordingInProgress = false;
+      }
     }
   }
 
@@ -458,6 +468,7 @@
   function finalizeCurrent(rawHeard) {
     if (finalizing) return;
     finalizing = true;
+    elements.skipButton.classList.add("is-hidden");
     const item = testItems[currentIndex];
     const { correct, display } = pronunciationJudge.judgePronunciation(item.word, rawHeard);
     answers.push({ item, heard: display, correct, order: currentIndex + 1 });
@@ -486,6 +497,22 @@
     clearTimeout(countdownTimer);
     updateText();
     countdownTimer = window.setTimeout(tick, 1000);
+  }
+
+  function skipCurrentQuestion() {
+    if (finalizing || !testItems[currentIndex]) return;
+    finalizing = true;
+    recognitionRun += 1;
+    recordingInProgress = false;
+    stopActiveRecording();
+    stopAudio();
+    clearTimeout(countdownTimer);
+    hideActionButtons();
+    const item = testItems[currentIndex];
+    answers.push({ item, heard: "已跳过", correct: false, order: currentIndex + 1 });
+    currentIndex += 1;
+    if (currentIndex >= testItems.length) showResults();
+    else playCurrentWord();
   }
 
   function setProgress() {
@@ -518,7 +545,7 @@
   function hideAnswer() { elements.answerText.textContent = ""; elements.heardText.textContent = ""; elements.answerCard.classList.add("is-hidden"); }
   function showFlash(correct) { elements.resultFlash.textContent = correct ? "正确" : "错误"; elements.resultFlash.className = `result-flash ${correct ? "good" : "bad"}`; }
   function hideFlash() { elements.resultFlash.className = "result-flash is-hidden"; }
-  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); elements.retryButton.classList.add("is-hidden"); retryAction = null; }
+  function hideActionButtons() { elements.resumeAudioButton.classList.add("is-hidden"); elements.recordButton.classList.add("is-hidden"); elements.retryButton.classList.add("is-hidden"); elements.skipButton.classList.add("is-hidden"); retryAction = null; }
 
   function showResults() {
     stopActiveRecording();

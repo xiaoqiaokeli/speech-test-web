@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="format-detection" content="telephone=no" />
     <title>言语测试</title>
-    <link rel="stylesheet" href="./styles.css?v=20260712-no-qr" />
+    <link rel="stylesheet" href="./styles.css?v=20260715-skip-silence" />
   </head>
   <body>
     <main id="app" class="app-shell" aria-live="polite">
@@ -46,6 +46,7 @@
         <button class="resume-button is-hidden" id="resumeAudioButton" type="button">点击继续播放</button>
         <button class="record-button is-hidden" id="recordButton" type="button">点击开始录音</button>
         <button class="record-button is-hidden" id="retryButton" type="button">重试</button>
+        <button class="skip-button is-hidden" id="skipButton" type="button" aria-label="跳过当前题">&gt;&gt; 跳过</button>
       </section>
 
       <section class="result-panel is-hidden" id="resultPanel">
@@ -77,7 +78,7 @@
       <section class="notice-modal" id="noticeModal" role="dialog" aria-modal="true" aria-labelledby="noticeTitle">
         <div class="notice-card">
           <h2 id="noticeTitle">请在安静的环境中测试</h2>
-          <p>请将嘴巴靠近手机，大声朗读。</p>
+          <p>请将嘴巴靠近设备，大声朗读。</p>
           <p>如果没听清，也请读出大概听到的发音，以便测出真实听力情况。</p>
           <button class="primary-button" id="startButton" type="button">开始测试</button>
         </div>
@@ -86,6 +87,6 @@
 
     <script src="./words-data.js"></script>
     <script src="./pronunciation-judge.js?v=20260715-judge-sync"></script>
-    <script src="./app.js?v=20260715-judge-sync"></script>
+    <script src="./app.js?v=20260715-skip-silence"></script>
   </body>
 </html>
